@@ -35,7 +35,7 @@
 
 #include "matx_error.h"
 #include "matx_tensor.h"
-#include <any>
+#include <functional>
 #include <cstdio>
 #ifdef __CUDACC__  
 #include <cub/cub.cuh>
@@ -43,6 +43,8 @@
 #include <numeric>
 
 namespace matx {
+
+using namespace std::placeholders;
 
 /**
  * @brief Direction for sorting
@@ -143,7 +145,9 @@ public:
     }
 
     if constexpr ((RANK == 1 && ( op == CUB_OP_REDUCE_SUM ||
-                                  op == CUB_OP_REDUCE)) ||
+                                  op == CUB_OP_REDUCE ||
+                                  op == CUB_OP_REDUCE_MIN ||
+                                  op == CUB_OP_REDUCE_MAX)) ||
                   (RANK == 2 && op == CUB_OP_RADIX_SORT)) {
       matxAlloc((void **)&d_offsets, (a.Size(a.Rank() - 2) + 1) * sizeof(index_t),
                 MATX_ASYNC_DEVICE_MEMORY, stream);
@@ -225,6 +229,25 @@ public:
     matxFree(d_offsets);
   }
 
+  template <typename Func>
+  void RunBatches(OutputTensor &a_out, const InputTensor &a, const Func &f, int batch_offset)
+  {
+    using shape_type = typename InputTensor::desc_type::shape_type;
+    std::array<shape_type, InputTensor::Rank()> idx{0};
+    auto a_shape = a.Shape();
+    // Get total number of batches
+    size_t total_iter = std::accumulate(a_shape.begin(), a_shape.begin() + InputTensor::Rank() - batch_offset, 1, std::multiplies<shape_type>());
+    for (size_t iter = 0; iter < total_iter; iter++) {
+      auto ap = std::apply([&a](auto... param) { return a.GetPointer(param...); }, idx);
+      auto aop = std::apply([&a_out](auto... param) { return a_out.GetPointer(param...); }, idx);
+
+      f(ap, aop);
+
+      // Update all but the last batch_offset indices
+      UpdateIndices<InputTensor, shape_type, InputTensor::Rank()>(a, idx, batch_offset);
+    }      
+  }
+
   /**
    * Execute an inclusive prefix sum on a tensor
    *
@@ -256,24 +279,10 @@ public:
           static_cast<int>(a.Lsize()), stream);
     }
     else { // Batch higher dims
-      using shape_type = typename InputTensor::desc_type::shape_type;
-      int batch_offset = 2;
-      std::array<shape_type, InputTensor::Rank()> idx{0};
-      auto a_shape = a.Shape();
-      // Get total number of batches
-      size_t total_iter = std::accumulate(a_shape.begin(), a_shape.begin() + InputTensor::Rank() - batch_offset, 1, std::multiplies<shape_type>());
-      for (size_t iter = 0; iter < total_iter; iter++) {
-        auto ap = std::apply([&a](auto... param) { return a.GetPointer(param...); }, idx);
-        auto aop = std::apply([&a_out](auto... param) { return a_out.GetPointer(param...); }, idx);
-
-        cub::DeviceHistogram::HistogramEven(
-            d_temp, temp_storage_bytes, ap, aop,
-            static_cast<int>(a_out.Lsize() + 1), lower, upper,
+      auto ft = [&](auto ...p){ return cub::DeviceHistogram::HistogramEven(p...); };
+      auto f = std::bind(ft, d_temp, temp_storage_bytes, _1, _2, static_cast<int>(a_out.Lsize() + 1), lower, upper,
             static_cast<int>(a.Lsize()), stream);
-
-        // Update all but the last 2 indices
-        UpdateIndices<InputTensor, shape_type, InputTensor::Rank()>(a, idx, batch_offset);
-      }      
+      RunBatches(a_out, a, f, 2);  
     }
 #endif    
   }
@@ -304,23 +313,9 @@ public:
                                     stream);
     }
     else {
-      using shape_type = typename InputTensor::desc_type::shape_type;
-      int batch_offset = 1;
-      std::array<shape_type, InputTensor::Rank()> idx{};
-      auto a_shape = a.Shape();
-      // Get total number of batches
-      size_t total_iter = std::accumulate(a_shape.begin(), a_shape.begin() + InputTensor::Rank() - batch_offset, 1, std::multiplies<shape_type>());
-      for (size_t iter = 0; iter < total_iter; iter++) {
-        auto ap = std::apply([&a](auto... param) { return a.GetPointer(param...); }, idx);
-        auto aop = std::apply([&a_out](auto... param) { return a_out.GetPointer(param...); }, idx);
-
-        cub::DeviceScan::InclusiveSum(d_temp, temp_storage_bytes,ap,
-                                      aop, static_cast<int>(a.Lsize()),
-                                      stream);
-
-        // Update all but the last 2 indices
-        UpdateIndices<InputTensor, shape_type, InputTensor::Rank()>(a, idx, batch_offset);
-      }        
+        auto ft = [&](auto ...p){ cub::DeviceScan::InclusiveSum(p...); };
+        auto f = std::bind(ft, d_temp, temp_storage_bytes, _1, _2, static_cast<int>(a.Lsize()), stream);
+        RunBatches(a_out, a, f, 1);
     }
 #endif    
   }
@@ -375,31 +370,18 @@ public:
         }
     }
     else {
-      using shape_type = typename InputTensor::desc_type::shape_type;
-      int batch_offset = 2;
-      std::array<shape_type, InputTensor::Rank()> idx{0};
-      auto a_shape = a.Shape();
-      // Get total number of batches
-      size_t total_iter = std::accumulate(a_shape.begin(), a_shape.begin() + InputTensor::Rank() - batch_offset, 1, std::multiplies<shape_type>());
-      for (size_t iter = 0; iter < total_iter; iter++) {
-        auto ap = std::apply([&a](auto... param) { return a.GetPointer(param...); }, idx);
-        auto aop = std::apply([&a_out](auto... param) { return a_out.GetPointer(param...); }, idx);
+      if (dir == SORT_DIR_ASC) {
+        auto ft = [&](auto ...p){ cub::DeviceSegmentedRadixSort::SortKeys(p...); };
 
-        if (dir == SORT_DIR_ASC) {
-          cub::DeviceSegmentedRadixSort::SortKeys(
-              d_temp, temp_storage_bytes, ap, aop,
-              static_cast<int>(a.Lsize()), static_cast<int>(a.Size(RANK - 2)),
-              d_offsets, d_offsets + 1, 0, sizeof(T1) * 8, stream);
-        }
-        else {
-          cub::DeviceSegmentedRadixSort::SortKeysDescending(
-              d_temp, temp_storage_bytes, ap, aop,
-              static_cast<int>(a.Lsize()), static_cast<int>(a.Size(RANK - 2)),
-              d_offsets, d_offsets + 1, 0, sizeof(T1) * 8, stream);
-        }
-          
-        // Update all but the last 2 indices
-        UpdateIndices<InputTensor, shape_type, InputTensor::Rank()>(a, idx, batch_offset);        
+        auto f = std::bind(ft, d_temp, temp_storage_bytes, _1, _2, static_cast<int>(a.Lsize()), static_cast<int>(a.Size(RANK - 2)),
+            d_offsets, d_offsets + 1, static_cast<int>(0), static_cast<int>(sizeof(T1) * 8), stream, false);
+        RunBatches(a_out, a, f, 2);            
+      }
+      else {
+        auto ft = [&](auto ...p){ cub::DeviceSegmentedRadixSort::SortKeysDescending(p...); };
+        auto f = std::bind(ft, d_temp, temp_storage_bytes, _1, _2, static_cast<int>(a.Lsize()), static_cast<int>(a.Size(RANK - 2)),
+            d_offsets, d_offsets + 1, static_cast<int>(0), static_cast<int>(sizeof(T1) * 8), stream, false);
+        RunBatches(a_out, a, f, 2);            
       }
     }
 #endif    
