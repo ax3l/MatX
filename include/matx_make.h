@@ -48,10 +48,14 @@ namespace matx {
  **/
 template <typename T, int RANK, typename O = owning>
 auto make_tensor(const index_t (&shape)[RANK]) {
-  DefaultDescriptor<RANK> desc{shape};
+  using desc_type = DefaultDescriptor<RANK>;
+  desc_type desc{shape};
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return tensor_t<T, 
+                  RANK, 
+                  decltype(s), 
+                  desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -63,10 +67,29 @@ auto make_tensor(const index_t (&shape)[RANK]) {
  **/
 template <typename T, int RANK, typename O = owning>
 auto make_tensor_p(const index_t (&shape)[RANK]) {
-  DefaultDescriptor<RANK> desc{shape};
+  using desc_type = DefaultDescriptor<RANK>;
+  desc_type desc{shape};
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return  new tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return  new tensor_t<T, RANK, decltype(s), desc_type>{std::move(s), std::move(desc)};
+}
+
+/**
+ * Create a tensor with C-array shapes and strides
+ *
+ * @param shape
+ *   Shape of tensor
+ * @param strides
+ *   Strides of tensor
+ * @returns New tensor
+ **/
+template <typename T, int RANK>
+auto make_tensor(const index_t (&shape)[RANK], const index_t (&strides)[RANK]) {
+  using desc_type = DefaultDescriptor<RANK, MemoryContig::MEMORY_NON_CONTIGUOUS>;
+  desc_type desc{shape, strides};    
+  raw_pointer_buffer<T, owning, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
+  basic_storage<decltype(rp)> s{std::move(rp)};  
+  return tensor_t<T,RANK, decltype(s), desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -82,10 +105,11 @@ auto make_tensor_p(const index_t (&shape)[RANK]) {
 template <typename T, int RANK, typename O = owning>
 [[deprecated("Use a conforming shape type instead of tensorShape_t")]] 
 auto make_tensor(const tensorShape_t<RANK> &shape) {
-  DefaultDescriptor<RANK> desc{std::move(shape.AsArray())};
+  using desc_type = DefaultDescriptor<RANK>;
+  desc_type desc{std::move(shape.AsArray())};
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return tensor_t<T, RANK, decltype(s), desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -101,10 +125,12 @@ auto make_tensor(const tensorShape_t<RANK> &shape) {
 template <typename T, int RANK, typename O = owning>
 [[deprecated("Use a conforming shape type instead of tensorShape_t")]] 
 auto make_tensor_p(const tensorShape_t<RANK> &shape) {
-  DefaultDescriptor<RANK> desc{std::move(shape.AsArray())};
+  using desc_type = DefaultDescriptor<RANK>;
+  desc_type desc{std::move(shape.AsArray())};
+
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return new tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return new tensor_t<T, RANK, decltype(s), desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -119,10 +145,12 @@ auto make_tensor_p(const tensorShape_t<RANK> &shape) {
 template <typename T, int RANK, typename O = owning>
 [[deprecated("Use a conforming shape type instead of tensorShape_t")]] 
 auto make_tensor(T *ptr, const tensorShape_t<RANK> &shape) {
-  DefaultDescriptor<RANK> desc{std::move(shape.AsArray())};
+  using desc_type = DefaultDescriptor<RANK>;
+  desc_type desc{std::move(shape.AsArray())};
+
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{ptr, static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return tensor_t<T, RANK, decltype(s), desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -141,14 +169,15 @@ template <typename T, typename ShapeType, typename O = owning,
                     !is_matx_descriptor_v<ShapeType> && 
                     !std::is_array_v<typename remove_cvref<ShapeType>::type>, bool> = true>
 auto make_tensor(ShapeType &&shape) {
-  constexpr int blah = static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value);
-  DefaultDescriptor<blah> desc{std::move(shape)};
+  constexpr int RANK = std::tuple_size<typename remove_cvref<ShapeType>::type>::value;
+  using desc_type = DefaultDescriptor<static_cast<int>(RANK)>;
+  desc_type desc{std::move(shape)};
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
   return tensor_t<T, 
-  std::tuple_size<typename remove_cvref<ShapeType>::type>::value, 
-  decltype(s), 
-  decltype(desc)>{std::move(s), std::move(desc)};
+                  RANK, 
+                  decltype(s), 
+                  desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -166,13 +195,15 @@ template <typename T, typename ShapeType, typename O = owning,
   std::enable_if_t< !is_matx_shape_v<ShapeType> && 
                     !std::is_array_v<typename remove_cvref<ShapeType>::type>, bool> = true>
 auto make_tensor_p(ShapeType &&shape) {
-  DefaultDescriptor<static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value)> desc{std::move(shape)};
+  using desc_type = DefaultDescriptor<static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value)>;
+  desc_type desc{std::move(shape)};
+
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
   return new tensor_t<T, 
-  std::tuple_size<typename remove_cvref<ShapeType>::type>::value, 
-  decltype(s), 
-  decltype(desc)>{std::move(s), std::move(desc)};
+                  std::tuple_size<typename remove_cvref<ShapeType>::type>::value, 
+                  decltype(s), 
+                  desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -214,10 +245,11 @@ auto make_tensor(T *ptr) {
  **/
 template <typename T, int RANK, typename O = owning>
 auto make_tensor(T *const data, const index_t (&shape)[RANK]) {
-  DefaultDescriptor<RANK> desc{shape};
+  using desc_type = DefaultDescriptor<RANK>;
+  desc_type desc{shape};
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{data, static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return tensor_t<T, RANK, decltype(s), desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -232,12 +264,11 @@ auto make_tensor(T *const data, const index_t (&shape)[RANK]) {
 template <typename T, typename ShapeType, typename O = owning, 
   std::enable_if_t<!is_matx_descriptor_v<ShapeType> && !std::is_array_v<typename remove_cvref<ShapeType>::type>, bool> = true>
 auto make_tensor(T *const data, ShapeType &&shape) {
-  constexpr int RANK = static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value);
-  DefaultDescriptor<RANK> 
-    desc{std::forward<ShapeType>(shape)};
+  using desc_type = DefaultDescriptor<static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value)>;
+  desc_type desc{std::forward<ShapeType>(shape)};
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{data, static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return tensor_t<T, desc_type::Rank(), decltype(s), desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -252,12 +283,12 @@ auto make_tensor(T *const data, ShapeType &&shape) {
 template <typename T, typename ShapeType, typename O = owning, 
   std::enable_if_t<!is_matx_descriptor_v<ShapeType> && !std::is_array_v<typename remove_cvref<ShapeType>::type>, bool> = true>
 auto make_tensor_p(T *const data, ShapeType &&shape) {
-  constexpr int RANK = static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value);
-  DefaultDescriptor<RANK> 
-    desc{std::forward<ShapeType>(shape)};
+  using desc_type = DefaultDescriptor<static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value)>;
+  desc_type desc{std::forward<ShapeType>(shape)};
+
   raw_pointer_buffer<T, O, matx_allocator<T>> rp{data, static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};
-  return new tensor_t<T, RANK, decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+  return new tensor_t<T, desc_type::Rank(), decltype(s), desc_type>{std::move(s), std::move(desc)};
 }
 
 /**
@@ -274,11 +305,10 @@ template <typename Storage, typename ShapeType,
                   !is_matx_descriptor_v<ShapeType> && 
                   !std::is_array_v<typename remove_cvref<ShapeType>::type>, bool> = true>
 auto make_tensor(Storage s, ShapeType &&shape) {
-  constexpr int RANK = static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value);
-  DefaultDescriptor<RANK> 
-    desc{std::forward<ShapeType>(shape)};  
+  using desc_type = DefaultDescriptor<static_cast<int>(std::tuple_size<typename remove_cvref<ShapeType>::type>::value)>;
+  desc_type desc{std::forward<ShapeType>(shape)};
   using T = typename Storage::T;
-  return tensor_t<T, RANK, Storage, decltype(desc)>{s, std::move(desc)};
+  return tensor_t<T, desc_type::Rank(), Storage, desc_type>{s, std::move(desc)};
 }
 
 
@@ -327,10 +357,11 @@ auto make_tensor(D &&desc) {
  **/
 template <typename T, int RANK>
 auto make_tensor(T *const data, const index_t (&shape)[RANK], const index_t (&strides)[RANK]) {
-  DefaultDescriptor<RANK>  desc{shape, strides};    
+  using desc_type = DefaultDescriptor<RANK, MemoryContig::MEMORY_NON_CONTIGUOUS>;
+  desc_type desc{shape, strides};    
   raw_pointer_buffer<T, owning, matx_allocator<T>> rp{data, static_cast<size_t>(desc.TotalSize()*sizeof(T))};
   basic_storage<decltype(rp)> s{std::move(rp)};  
-  return tensor_t<T,RANK, decltype(s), decltype(desc)>{data, shape, strides};
+  return tensor_t<T,RANK, decltype(s), desc_type>{data, std::move(s), std::move(desc)};
 }
 
 
@@ -345,12 +376,12 @@ auto make_tensor(T *const data, const index_t (&shape)[RANK], const index_t (&st
  *   Strides of tensor
  * @returns New tensor
  **/
-template <typename T, index_t I, index_t ...Is>
-auto make_static_tensor() {
-  static_tensor_desc_t<I, Is...> desc{};  
-  raw_pointer_buffer<T, owning, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
-  basic_storage<decltype(rp)> s{std::move(rp)};  
-  return tensor_t<T, desc.Rank(), decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
-}
+// template <typename T, index_t I, index_t ...Is>
+// auto make_static_tensor() {
+//   static_tensor_desc_t<I, Is...> desc{};  
+//   raw_pointer_buffer<T, owning, matx_allocator<T>> rp{static_cast<size_t>(desc.TotalSize()*sizeof(T))};
+//   basic_storage<decltype(rp)> s{std::move(rp)};  
+//   return tensor_t<T, desc.Rank(), decltype(s), decltype(desc)>{std::move(s), std::move(desc)};
+// }
 
 } // namespace matx

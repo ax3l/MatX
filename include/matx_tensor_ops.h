@@ -285,7 +285,7 @@ inline
       return;
     }
 
-    if (!in.IsLinear())
+    if (!in.IsContiguous())
     {
       MATX_THROW(matxInvalidSize, "Must have a linear tensor view for transpose");
     }

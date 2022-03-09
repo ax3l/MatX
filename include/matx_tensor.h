@@ -177,6 +177,10 @@ public:
   using matxop = bool; ///< Indicate this is a MatX operator
   using tensor_view = bool; ///< Indicate this is a MatX tensor view
   using storage_type = Storage; ///< Storage type trait
+  using shape_type = typename Desc::shape_type;
+  using stride_type = typename Desc::stride_type;
+  using shape_container = typename Desc::shape_container;
+  using stride_container = typename Desc::stride_container;
   using desc_type = Desc; ///< Descriptor type trait
   using self_type = tensor_t<T, RANK, Storage, Desc>;
   static constexpr bool PRINT_ON_DEVICE = false;      ///< Print() uses printf on device
@@ -220,7 +224,7 @@ public:
    * @param rhs
    *   Tensor to copy from
    */
-  __MATX_HOST__ void Shallow(const tensor_t<T, RANK, Storage, Desc> &rhs) noexcept
+  __MATX_HOST__ void Shallow(const self_type &rhs) noexcept
   {
     this->ldata_ = rhs.ldata_;
     storage_ = rhs.storage_;
@@ -245,8 +249,6 @@ public:
     storage_{std::forward<S2>(s)}
   {
     this->SetLocalData(storage_.data());
-    // static_assert(std::is_same_v<Storage, DefaultStorage<RANK>>, 
-    //   "Must use default storage if not providing")
   } 
 
   /**
@@ -256,13 +258,12 @@ public:
    * @param desc 
    * @param ldata 
    */
-  tensor_t(Storage s, Desc &&desc, T* ldata) :
-    detail::tensor_impl_t<T, RANK, Desc>{std::forward<Desc>(desc)},
+  template <typename D2 = Desc>
+  tensor_t(Storage s, D2 &&desc, T* ldata) :
+    detail::tensor_impl_t<T, RANK, D2>{std::forward<D2>(desc)},
     storage_{std::move(s)}
   {
     this->SetLocalData(ldata);
-    // static_assert(std::is_same_v<Storage, DefaultStorage<RANK>>, 
-    //   "Must use default storage if not providing")
   }  
 
 
@@ -274,8 +275,8 @@ public:
    */
   template <typename D2 = Desc, typename = 
     typename std::enable_if_t<is_matx_descriptor_v<D2>>>
-  __MATX_INLINE__ tensor_t(Desc &&desc) :
-    detail::tensor_impl_t<T, RANK, Desc>{std::forward<Desc>(desc)},
+  __MATX_INLINE__ tensor_t(D2 &&desc) :
+    detail::tensor_impl_t<T, RANK, D2>{std::forward<D2>(desc)},
     storage_{typename Storage::container{this->desc_.TotalSize()*sizeof(T)}}
   {
     this->SetLocalData(storage_.data());
@@ -307,7 +308,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator=(const self_type &op)
   {
       return detail::set(*this, op);
   }
@@ -338,7 +339,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator+=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator+=(const self_type &op)
   {
       return detail::set(*this, *this + op);
   }
@@ -370,7 +371,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator-=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator-=(const self_type &op)
   {
       return detail::set(*this, *this - op);
   }
@@ -404,7 +405,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator*=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator*=(const self_type &op)
   {
       return detail::set(*this, *this * op);
   }
@@ -436,7 +437,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator/=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator/=(const self_type &op)
   {
       return detail::set(*this, *this / op);
   }
@@ -468,7 +469,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator<<=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator<<=(const self_type &op)
   {
       return detail::set(*this, *this << op);
   }
@@ -500,7 +501,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator>>=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator>>=(const self_type &op)
   {
       return detail::set(*this, *this >> op);
   }
@@ -532,7 +533,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator|=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator|=(const self_type &op)
   {
       return detail::set(*this, *this | op);
   }
@@ -564,7 +565,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator&=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator&=(const self_type &op)
   {
       return detail::set(*this, *this & op);
   }
@@ -596,7 +597,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator^=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator^=(const self_type &op)
   {
       return detail::set(*this, *this ^ op);
   }
@@ -628,7 +629,7 @@ public:
    * @returns set object containing the destination view and source object
    *
    */
-  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator%=(const tensor_t<T, RANK, Storage, Desc> &op)
+  [[nodiscard]] __MATX_INLINE__ __MATX_HOST__ auto operator%=(const self_type &op)
   {
       return detail::set(*this, *this % op);
   }
@@ -742,13 +743,27 @@ public:
     std::array<index_t, NRANK> tshape;
     std::move(std::begin(shape), std::end(shape), tshape.begin()); 
 
-    typename Desc::stride_type prod = std::accumulate(std::begin(shape), std::end(shape), 1, std::multiplies<typename Desc::stride_type>());
+    stride_type prod = std::accumulate(std::begin(shape), std::end(shape), 1, std::multiplies<stride_type>());
     MATX_ASSERT_STR(
         sizeof(T) * prod <= storage_.Bytes(), matxInvalidSize,
         "Total size of new tensor must not be larger than the original");    
 
-    DefaultDescriptor<tshape.size()> desc{std::move(tshape)};   
-    return tensor_t<T, NRANK, Storage, decltype(desc)>{storage_, std::move(desc), this->ldata_};
+    if constexpr (NRANK < 2) {
+      using new_desc_t = typename Desc::template self_type< std::array<shape_type, tshape.size()>, 
+                                                          std::array<stride_type, tshape.size()>, 
+                                                          tshape.size(),
+                                                          MemoryContig::MEMORY_CONTIGUOUS_ROW>;
+      new_desc_t desc{std::move(tshape)};
+      return tensor_t<T, NRANK, Storage, decltype(desc)>{storage_, std::move(desc), this->ldata_};  
+    }
+    else {
+      using new_desc_t = typename Desc::template self_type< std::array<shape_type, tshape.size()>, 
+                                                          std::array<stride_type, tshape.size()>, 
+                                                          tshape.size(), 
+                                                          MemoryContig::MEMORY_NON_CONTIGUOUS>;
+      new_desc_t desc{std::move(tshape)};
+      return tensor_t<T, NRANK, Storage, decltype(desc)>{storage_, std::move(desc), this->ldata_};        
+    }
   }  
 
   /**
@@ -756,9 +771,15 @@ public:
    * 
    * @return Copy of view
    */
+  template <MemoryContig mc = Desc::GetMemoryContig()>
   __MATX_INLINE__ auto View()
   {
-    return *this;
+    using new_desc_t = typename Desc::template self_type< shape_container, 
+                                                        stride_container, 
+                                                        RANK, 
+                                                        mc>;  
+    new_desc_t desc{this->Shape()};  
+    return tensor_t<T, RANK, Storage, Desc>{storage_, std::move(desc), this->ldata_};
   }
 
   /**
@@ -824,8 +845,12 @@ public:
     }
 
     // Copy descriptor and call ctor with shape
-    Desc new_desc{this->desc_.Shape(), std::move(strides)};  
-    return tensor_t<Type, RANK, Storage, Desc>{storage_, std::move(new_desc), data};
+    using new_desc_t = typename Desc::template self_type< shape_container, 
+                                                        stride_container, 
+                                                        RANK,
+                                                        MemoryContig::MEMORY_NON_CONTIGUOUS>;    
+    new_desc_t new_desc{this->desc_.Shape(), std::move(strides)};  
+    return tensor_t<Type, RANK, Storage, new_desc_t>{storage_, std::move(new_desc), data};
   }
 
   /**
@@ -852,7 +877,7 @@ public:
 
     using Type = typename U::value_type;
     Type *data = reinterpret_cast<Type *>(this->ldata_) + 1;
-    std::array<typename Desc::stride_type, RANK> strides;
+    std::array<stride_type, RANK> strides;
 #pragma unroll
     for (int i = 0; i < RANK; i++) {
       strides[i] = this->Stride(i);
@@ -865,8 +890,12 @@ public:
       }
     }
 
-    Desc new_desc{this->desc_.Shape(), std::move(strides)};  
-    return tensor_t<Type, RANK, Storage, Desc>{storage_, std::move(new_desc), data};
+    using new_desc_t = typename Desc::template self_type< shape_container, 
+                                                        stride_container, 
+                                                        RANK,
+                                                        MemoryContig::MEMORY_NON_CONTIGUOUS>;    
+    new_desc_t new_desc{this->desc_.Shape(), std::move(strides)};  
+    return tensor_t<Type, RANK, Storage, new_desc_t>{storage_, std::move(new_desc), data};
   }
 
   /**
@@ -884,11 +913,11 @@ public:
    * @returns tensor view of only imaginary-valued components
    *
    */
-  __MATX_INLINE__ tensor_t Permute(const uint32_t (&dims)[RANK]) const
+  __MATX_INLINE__ auto Permute(const uint32_t (&dims)[RANK]) const
   {
     static_assert(RANK >= 2, "Only tensors of rank 2 and higher can be permuted.");
-    std::array<typename Desc::shape_type, RANK> n;
-    std::array<typename Desc::stride_type, RANK> s;
+    std::array<shape_type, RANK> n;
+    std::array<stride_type, RANK> s;
     [[maybe_unused]] bool done[RANK] = {0};
 
 #pragma unroll
@@ -903,8 +932,12 @@ public:
       s[i] = this->Stride(d);
     }
 
-    Desc new_desc{std::move(n), std::move(s)};  
-    return tensor_t<T, RANK, Storage, Desc>{storage_, std::move(new_desc), this->ldata_};
+    using new_desc_t = typename Desc::template self_type< decltype(n), 
+                                                          decltype(s), 
+                                                          RANK,
+                                                          MemoryContig::MEMORY_NON_CONTIGUOUS>;    
+    new_desc_t new_desc{std::move(n), std::move(s)};
+    return tensor_t<T, RANK, Storage, new_desc_t>{storage_, std::move(new_desc), this->ldata_};
   }
 
   /**

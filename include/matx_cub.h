@@ -411,7 +411,7 @@ public:
   {
 #ifdef __CUDACC__      
     if constexpr (RANK == 0) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceReduce::Reduce(d_temp, 
                                   temp_storage_bytes, 
                                   a.Data(), 
@@ -434,7 +434,7 @@ public:
       }                                     
     }
     else if constexpr (RANK == 1) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceSegmentedReduce::Reduce( d_temp, 
                                             temp_storage_bytes, 
                                             a.Data(), 
@@ -482,7 +482,7 @@ public:
   {
 #ifdef __CUDACC__      
     if constexpr (RANK == 0) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceReduce::Sum(d_temp, 
                                   temp_storage_bytes, 
                                   a.Data(), 
@@ -501,7 +501,7 @@ public:
       }                                     
     }
     else if constexpr (RANK == 1) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceSegmentedReduce::Sum( d_temp, 
                                             temp_storage_bytes, 
                                             a.Data(), 
@@ -549,7 +549,7 @@ public:
   {
 #ifdef __CUDACC__      
     if constexpr (RANK == 0) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceReduce::Min(d_temp, 
                                   temp_storage_bytes, 
                                   a.Data(), 
@@ -568,7 +568,7 @@ public:
       }                                     
     }
     else if constexpr (RANK == 1) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceSegmentedReduce::Min( d_temp, 
                                             temp_storage_bytes, 
                                             a.Data(), 
@@ -616,7 +616,7 @@ public:
   {
 #ifdef __CUDACC__      
     if constexpr (RANK == 0) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceReduce::Max(d_temp, 
                                   temp_storage_bytes, 
                                   a.Data(), 
@@ -635,7 +635,7 @@ public:
       }                                     
     }
     else if constexpr (RANK == 1) {
-      if (a.IsLinear()) {
+      if (a.IsContiguous()) {
         cub::DeviceSegmentedReduce::Max( d_temp, 
                                             temp_storage_bytes, 
                                             a.Data(), 
@@ -681,7 +681,7 @@ public:
                        const cudaStream_t stream)
   {
 #ifdef __CUDACC__      
-    if (a.IsLinear()) {
+    if (a.IsContiguous()) {
       cub::DeviceSelect::If(d_temp, 
                             temp_storage_bytes, 
                             a.Data(), 
@@ -726,7 +726,7 @@ public:
                        const cudaStream_t stream)
   {
 #ifdef __CUDACC__      
-    if (a.IsLinear()) {
+    if (a.IsContiguous()) {
       cub::DeviceSelect::Unique(d_temp, 
                             temp_storage_bytes, 
                             a.Data(), 

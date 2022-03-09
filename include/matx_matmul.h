@@ -429,6 +429,7 @@ private:
     MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);
 
     cublasLtOrder_t rowOrder = CUBLASLT_ORDER_ROW;
+    cublasLtOrder_t colOrder = CUBLASLT_ORDER_COL;
 
     // A operation
     ret = cublasLtMatmulDescSetAttribute(
@@ -480,15 +481,31 @@ private:
     MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);
 
     // Matrix data order
-    ret = cublasLtMatrixLayoutSetAttribute(
-                    Adesc, CUBLASLT_MATRIX_LAYOUT_ORDER, &rowOrder,
-                    sizeof(rowOrder));
-    MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);
+    if (params_.opA == CUBLAS_OP_N) {
+      ret = cublasLtMatrixLayoutSetAttribute(
+                      Adesc, CUBLASLT_MATRIX_LAYOUT_ORDER, &rowOrder,
+                      sizeof(rowOrder));
+      MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);
+    }
+    else if (params_.opA == CUBLAS_OP_T) {
+      ret = cublasLtMatrixLayoutSetAttribute(
+                      Adesc, CUBLASLT_MATRIX_LAYOUT_ORDER, &colOrder,
+                      sizeof(colOrder));
+      MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);      
+    }
 
-    ret = cublasLtMatrixLayoutSetAttribute(
-                    Bdesc, CUBLASLT_MATRIX_LAYOUT_ORDER, &rowOrder,
-                    sizeof(rowOrder));
-    MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);
+    if (params_.opB == CUBLAS_OP_N) {
+      ret = cublasLtMatrixLayoutSetAttribute(
+                      Bdesc, CUBLASLT_MATRIX_LAYOUT_ORDER, &rowOrder,
+                      sizeof(rowOrder));
+      MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);
+    }
+    else if (params_.opB == CUBLAS_OP_T) {
+      ret = cublasLtMatrixLayoutSetAttribute(
+                      Bdesc, CUBLASLT_MATRIX_LAYOUT_ORDER, &colOrder,
+                      sizeof(colOrder));
+      MATX_ASSERT(ret == CUBLAS_STATUS_SUCCESS, matxMatMulError);      
+    }
 
     ret = cublasLtMatrixLayoutSetAttribute(
                     Cdesc, CUBLASLT_MATRIX_LAYOUT_ORDER, &rowOrder,
@@ -802,13 +819,7 @@ private:
                                                         beta);
     }
     else if (c.Stride(RANK - 2) == 1) {
-      // Generate permutation
-      uint32_t perm[RANK];
-      std::iota(std::begin(perm), std::end(perm), 0);
-      std::swap(perm[RANK - 1], perm[RANK - 2]);
-
-      auto ct = c.Permute(perm);
-      MatMulDispatchC<OrderA, MEM_ORDER_COL_MAJOR>(a, b, ct, stream, alpha,
+      MatMulDispatchC<OrderA, MEM_ORDER_COL_MAJOR>(a, b, c, stream, alpha,
                                                    beta);
     }
     else {
@@ -828,13 +839,7 @@ private:
                                                    beta);
     }
     else if (b.Stride(RANK - 2) == 1) {
-      // Generate permutation
-      uint32_t perm[RANK];
-      std::iota(std::begin(perm), std::end(perm), 0);
-      std::swap(perm[RANK - 1], perm[RANK - 2]);
-
-      auto bt = b.Permute(perm);
-      MatMulDispatchC<OrderA, MEM_ORDER_COL_MAJOR>(a, bt, c, stream, alpha,
+      MatMulDispatchC<OrderA, MEM_ORDER_COL_MAJOR>(a, b, c, stream, alpha,
                                                    beta);
     }
     else {
@@ -852,13 +857,7 @@ private:
       MatMulDispatchB<MEM_ORDER_ROW_MAJOR>(a, b, c, stream, alpha, beta);
     }
     else if (a.Stride(RANK - 2) == 1) {
-      // Generate permutation
-      uint32_t perm[RANK];
-      std::iota(std::begin(perm), std::end(perm), 0);
-      std::swap(perm[RANK - 1], perm[RANK - 2]);
-
-      auto at = a.Permute(perm);
-      MatMulDispatchB<MEM_ORDER_COL_MAJOR>(at, b, c, stream, alpha, beta);
+      MatMulDispatchB<MEM_ORDER_COL_MAJOR>(a, b, c, stream, alpha, beta);
     }
     else {
       MATX_THROW(matxNotSupported,

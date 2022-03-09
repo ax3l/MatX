@@ -51,6 +51,17 @@
 
 namespace matx {
 
+enum class MemoryLayout {
+  MEMORY_LAYOUT_ROW_MAJOR,
+  MEMORY_LAYOUT_COL_MAJOR,
+};
+
+enum class MemoryContig {
+  MEMORY_CONTIGUOUS_ROW,
+  MEMORY_CONTIGUOUS_COL,
+  MEMORY_NON_CONTIGUOUS
+};
+
 /**
  * @brief Removes cv and reference qualifiers on a type
  * 
@@ -62,7 +73,7 @@ struct remove_cvref {
 };  
 
 template <typename T, int RANK, typename Desc> class tensor_impl_t;
-template <typename T, int RANK, typename Storage, typename Desc> class tensor_t;  
+template <typename T, int RANK, typename Storage, typename Desc> class tensor_t;
 
 namespace detail {
 template <typename T, typename = void>

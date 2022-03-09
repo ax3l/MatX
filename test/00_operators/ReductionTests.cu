@@ -469,9 +469,9 @@ TYPED_TEST(ReductionTestsNumericNonComplex, Prod)
 
     std::array<index_t, 2> s2{3, 4};
     std::array<index_t, 1> s1{3};
+    auto t1 = make_tensor<TypeParam>(s1);
+    auto t2 = make_tensor<TypeParam>(s2);
 
-    tensor_t<TypeParam, 1> t1{s1};
-    tensor_t<TypeParam, 2> t2{s2};
     TypeParam t1p = (TypeParam)1;
     for (int i = 0; i < t1.Size(0); i++) {
       t1(i) = static_cast<detail::value_promote_t<TypeParam>>((float)rand() /

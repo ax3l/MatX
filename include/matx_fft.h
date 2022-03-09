@@ -678,7 +678,8 @@ auto  GetFFTInputView([[maybe_unused]] OutputTensor &o,
     // slice.
     if (act_fft_size < nom_fft_size) {
       ends[RANK - 1] = nom_fft_size;
-      return i.Slice(starts, ends);
+      auto s = i.Slice(starts, ends).template View<InputTensor::desc_type::GetMemoryContig()>();
+      return s;
     }
     else { // FFT length is longer than the input. Pad input
       T2 *i_pad;
@@ -698,7 +699,14 @@ auto  GetFFTInputView([[maybe_unused]] OutputTensor &o,
                 sizeof(T1) * tot, MATX_ASYNC_DEVICE_MEMORY,
                 stream);
 
-      auto i_new = make_tensor<T2>(i_pad, shape);
+      // We need to maintain the same descriptor type (including the contiguous piece) so the return type
+      // matches the other case below
+      constexpr auto mc = InputTensor::desc_type::GetMemoryContig();
+      auto desc = tensor_desc_t<typename InputTensor::shape_container,
+                                typename InputTensor::stride_container,
+                                RANK, 
+                                mc>{shape};
+      auto i_new = make_tensor<T2>(i_pad, desc);
       ends[RANK - 1] = i.Lsize();
       auto i_pad_part_v = i_new.Slice(starts, ends);
 
@@ -761,11 +769,6 @@ void fft(OutputTensor &o, const InputTensor &i,
     auto fft_type = static_cast<detail::matxFFTPlan1D_t<OutputTensor, InputTensor> *>(ret.value());
     fft_type->Forward(o, i_new, stream);
   }
-  
-  // If we async-allocated memory for zero-padding, free it here
-  // if (i_new.Data() != i.Data()) {
-  //   matxFree(i_new.Data());
-  // }
 }
 
 /**

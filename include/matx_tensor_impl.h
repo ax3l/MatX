@@ -685,9 +685,9 @@ class tensor_impl_t {
      * @return
      *    The size of the dimension
      */
-    __MATX_INLINE__ __MATX_HOST__ __MATX_DEVICE__ bool IsLinear() const noexcept
+    __MATX_INLINE__ __MATX_HOST__ __MATX_DEVICE__ constexpr bool IsContiguous() const noexcept
     {
-      return desc_.IsLinear();
+      return desc_.IsContiguous();
     }
 
     template <int I = 0, typename ...Is>
